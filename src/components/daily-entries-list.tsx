@@ -9,15 +9,22 @@ import { Trash2, TrendingUp } from "lucide-react";
 interface DailyEntriesListProps {
   entries: IncomeEntry[];
   onDelete: (id: string) => void;
+  selectedDate: Date;
 }
 
-export default function DailyEntriesList({ entries, onDelete }: DailyEntriesListProps) {
+export default function DailyEntriesList({ entries, onDelete, selectedDate }: DailyEntriesListProps) {
+  const isToday = new Date().toDateString() === selectedDate.toDateString();
+  const title = isToday ? "Entradas de Hoy" : "Entradas del Día";
+  const description = isToday 
+    ? "Aquí están todas las transacciones registradas hoy."
+    : `Mostrando transacciones para el ${selectedDate.toLocaleDateString('es-CO')}.`;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Entradas de Hoy</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>
-          Aquí están todas las transacciones registradas hoy.
+          {description}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -25,12 +32,12 @@ export default function DailyEntriesList({ entries, onDelete }: DailyEntriesList
           {entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground p-8">
               <TrendingUp className="h-12 w-12 mb-4"/>
-              <p className="font-medium">No hay registros hoy.</p>
-              <p className="text-sm">¡Agrega tu primer ingreso para empezar!</p>
+              <p className="font-medium">No hay registros para este día.</p>
+              <p className="text-sm">¡Agrega un ingreso para empezar!</p>
             </div>
           ) : (
             <ul className="space-y-4">
-              {entries.map((entry, index) => (
+              {entries.sort((a,b) => b.timestamp - a.timestamp).map((entry, index) => (
                 <li key={entry.id}>
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1">

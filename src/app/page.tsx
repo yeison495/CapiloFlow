@@ -3,19 +3,23 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { IncomeEntry } from '@/types';
 import { getWeekRange, getPreviousWeekRange } from '@/lib/date-utils';
-import { DollarSign, CalendarDays, Scissors } from 'lucide-react';
+import { DollarSign, CalendarDays, Scissors, Calendar as CalendarIcon } from 'lucide-react';
 import Header from '@/components/header';
 import SummaryCard from '@/components/summary-card';
 import PayoutCard from '@/components/payout-card';
 import IncomeForm from '@/components/income-form';
 import DailyEntriesList from '@/components/daily-entries-list';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function Home() {
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
-  const [today, setToday] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   useEffect(() => {
-    setToday(new Date());
     try {
       const savedEntries = localStorage.getItem('capiloflow-entries');
       if (savedEntries) {
@@ -33,11 +37,11 @@ export default function Home() {
       console.error("Failed to save entries to localStorage", error);
     }
   }, [entries]);
-  
+
   const handleAddIncome = (income: { amount: number; description: string }) => {
     const newEntry: IncomeEntry = {
       id: crypto.randomUUID(),
-      timestamp: Date.now(),
+      timestamp: selectedDate ? new Date(selectedDate).setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds()) : Date.now(),
       ...income,
     };
     setEntries((prevEntries) => [...prevEntries, newEntry]);
@@ -47,35 +51,40 @@ export default function Home() {
     setEntries((prevEntries) => prevEntries.filter(entry => entry.id !== id));
   };
 
-  const { todayTotal, weekTotal, previousWeekTotal, todayEntries, isSaturday } = useMemo(() => {
-    if (!today) {
-      return { todayTotal: 0, weekTotal: 0, previousWeekTotal: 0, todayEntries: [], isSaturday: false };
-    }
+  const {
+    selectedDateTotal,
+    weekTotal,
+    previousWeekTotal,
+    selectedDateEntries,
+    isSaturday,
+  } = useMemo(() => {
+    const today = new Date();
+    const date = selectedDate || today;
 
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
 
-    const todayEntries = entries.filter((entry) => {
+    const dayEntries = entries.filter((entry) => {
       const entryDate = new Date(entry.timestamp);
-      return entryDate >= todayStart && entryDate <= todayEnd;
+      return entryDate >= dayStart && entryDate <= dayEnd;
     });
 
-    const todayTotal = todayEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const dayTotal = dayEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
-    const currentWeek = getWeekRange(today);
+    const currentWeek = getWeekRange(date);
     const weekEntries = entries.filter((entry) => {
       const entryDate = new Date(entry.timestamp);
       return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
     });
     const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
-    const isTodaySaturday = today.getDay() === 6;
+    const isTodaySaturday = date.getDay() === 6;
 
     let prevWeekTotal = 0;
     if (isTodaySaturday) {
-      const previousWeek = getPreviousWeekRange(today);
+      const previousWeek = getPreviousWeekRange(date);
       const previousWeekEntries = entries.filter((entry) => {
         const entryDate = new Date(entry.timestamp);
         return entryDate >= previousWeek.start && entryDate <= previousWeek.end;
@@ -84,15 +93,15 @@ export default function Home() {
     }
 
     return {
-      todayTotal,
+      selectedDateTotal: dayTotal,
       weekTotal,
       previousWeekTotal: prevWeekTotal,
-      todayEntries,
+      selectedDateEntries: dayEntries,
       isSaturday: isTodaySaturday,
     };
-  }, [entries, today]);
+  }, [entries, selectedDate]);
 
-  if (!today) {
+  if (!selectedDate) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Scissors className="h-12 w-12 animate-spin text-primary" />
@@ -100,12 +109,38 @@ export default function Home() {
     );
   }
 
+  const selectedDayIsToday = selectedDate && new Date().toDateString() === selectedDate.toDateString();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       <main className="container mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <h2 className="text-2xl font-bold">Resumen</h2>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className="w-[280px] justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, "PPP", { locale: es }) : <span>Elige una fecha</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                initialFocus
+                locale={es}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <SummaryCard title="Ingresos de Hoy" value={todayTotal} icon={<DollarSign className="h-6 w-6 text-primary" />} />
+          <SummaryCard title={selectedDayIsToday ? "Ingresos de Hoy" : "Ingresos del Día"} value={selectedDateTotal} icon={<DollarSign className="h-6 w-6 text-primary" />} />
           <SummaryCard title="Total de la Semana" value={weekTotal} icon={<CalendarDays className="h-6 w-6 text-primary" />} />
           {isSaturday && <PayoutCard amount={previousWeekTotal} />}
         </div>
@@ -115,7 +150,7 @@ export default function Home() {
             <IncomeForm onAddIncome={handleAddIncome} />
           </div>
           <div className="lg:col-span-3">
-            <DailyEntriesList entries={todayEntries} onDelete={handleDeleteIncome} />
+            <DailyEntriesList entries={selectedDateEntries} onDelete={handleDeleteIncome} selectedDate={selectedDate} />
           </div>
         </div>
       </main>
