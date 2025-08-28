@@ -14,41 +14,58 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 
 export default function Home() {
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const savedEntries = localStorage.getItem('capiloflow-entries');
-      if (savedEntries) {
-        setEntries(JSON.parse(savedEntries));
-      }
-    } catch (error) {
-      console.error("Failed to parse entries from localStorage", error);
-    }
+    const unsubscribe = onSnapshot(collection(db, "entries"), (snapshot) => {
+      const newEntries: IncomeEntry[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        newEntries.push({
+          id: doc.id,
+          amount: data.amount,
+          description: data.description,
+          // Firestore timestamps need to be converted to milliseconds
+          timestamp: (data.timestamp as Timestamp).toMillis(),
+        });
+      });
+      setEntries(newEntries);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('capiloflow-entries', JSON.stringify(entries));
-    } catch (error) {
-      console.error("Failed to save entries to localStorage", error);
-    }
-  }, [entries]);
 
-  const handleAddIncome = (income: { amount: number; description: string }) => {
-    const newEntry: IncomeEntry = {
-      id: crypto.randomUUID(),
-      timestamp: selectedDate ? new Date(selectedDate).setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds()) : Date.now(),
+  const handleAddIncome = async (income: { amount: number; description: string }) => {
+    if (!selectedDate) return;
+    
+    const newEntry = {
       ...income,
+      timestamp: Timestamp.fromDate(
+        new Date(selectedDate.setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds()))
+      ),
     };
-    setEntries((prevEntries) => [...prevEntries, newEntry]);
+
+    try {
+      await addDoc(collection(db, "entries"), newEntry);
+    } catch (error) {
+      console.error("Error adding document: ", error);
+    }
   };
 
-  const handleDeleteIncome = (id: string) => {
-    setEntries((prevEntries) => prevEntries.filter(entry => entry.id !== id));
+  const handleDeleteIncome = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "entries", id));
+    } catch (error) {
+      console.error("Error deleting document: ", error);
+    }
   };
 
   const {
@@ -101,7 +118,7 @@ export default function Home() {
     };
   }, [entries, selectedDate]);
 
-  if (!selectedDate) {
+  if (loading || !selectedDate) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Scissors className="h-12 w-12 animate-spin text-primary" />
