@@ -24,7 +24,7 @@ export default function IncomeForm({ onAddIncome }: IncomeFormProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      amount: undefined,
+      amount: '' as any,
       description: '',
     },
   });
@@ -42,7 +42,7 @@ export default function IncomeForm({ onAddIncome }: IncomeFormProps) {
     <Card>
       <CardHeader>
         <CardTitle>Registrar Ingreso</CardTitle>
-        <CardDescription>Añade un nuevo ingreso para el día de hoy.</CardDescription>
+        <CardDescription>Añade un nuevo ingreso para el día seleccionado.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
