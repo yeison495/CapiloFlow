@@ -14,8 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from 'firebase/firestore';
 
 export default function Home() {
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
@@ -23,55 +21,41 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'entries'),
-      (snapshot) => {
-        const newEntries: IncomeEntry[] = snapshot.docs
-          .filter(doc => doc.exists() && doc.data().timestamp)
-          .map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              amount: data.amount,
-              description: data.description,
-              timestamp: (data.timestamp as Timestamp).toMillis(),
-            };
-          });
-        setEntries(newEntries);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching Firestore data: ", error);
-        setLoading(false); // Stop loading even if there's an error
+    try {
+      const storedEntries = localStorage.getItem('income-entries');
+      if (storedEntries) {
+        setEntries(JSON.parse(storedEntries));
       }
-    );
-
-    return () => unsubscribe();
+    } catch (error) {
+      console.error("Error reading from localStorage", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-
-  const handleAddIncome = async (income: { amount: number; description: string }) => {
+  useEffect(() => {
     try {
-      await addDoc(collection(db, "entries"), {
-        ...income,
-        timestamp: Timestamp.now(),
-      });
+      localStorage.setItem('income-entries', JSON.stringify(entries));
     } catch (error) {
-      console.error("Error adding document: ", error);
+      console.error("Error writing to localStorage", error);
     }
+  }, [entries]);
+
+  const handleAddIncome = (income: { amount: number; description: string }) => {
+    const newEntry: IncomeEntry = {
+      id: new Date().toISOString(),
+      ...income,
+      timestamp: new Date().getTime(),
+    };
+    setEntries((prevEntries) => [...prevEntries, newEntry]);
   };
 
-  const handleDeleteIncome = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, "entries", id));
-    } catch (error) {
-      console.error("Error deleting document: ", error);
-    }
+  const handleDeleteIncome = (id: string) => {
+    setEntries((prevEntries) => prevEntries.filter((entry) => entry.id !== id));
   };
 
   const selectedDateEntries = entries.filter((entry) => {
     const entryDate = new Date(entry.timestamp);
-    // Compare year, month, and day, ignoring time and timezone
     return entryDate.getFullYear() === selectedDate.getFullYear() &&
            entryDate.getMonth() === selectedDate.getMonth() &&
            entryDate.getDate() === selectedDate.getDate();
@@ -97,7 +81,7 @@ export default function Home() {
     });
     previousWeekTotal = previousWeekEntries.reduce((sum, entry) => sum + entry.amount, 0);
   }
-
+  
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -105,7 +89,7 @@ export default function Home() {
       </div>
     );
   }
-  
+
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date);
