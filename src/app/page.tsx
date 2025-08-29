@@ -25,7 +25,7 @@ export default function Home() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "entries"), (snapshot) => {
       const newEntries: IncomeEntry[] = snapshot.docs
-      .filter(doc => doc.exists()) // Make sure document exists
+      .filter(doc => doc.exists() && doc.data().timestamp) // Ensure doc and timestamp exist
       .map((doc) => {
         const data = doc.data();
         return {
@@ -33,7 +33,7 @@ export default function Home() {
           amount: data.amount,
           description: data.description,
           // Safely handle timestamp conversion
-          timestamp: data.timestamp ? (data.timestamp as Timestamp).toMillis() : new Date().getTime(),
+          timestamp: (data.timestamp as Timestamp).toMillis(),
         };
       });
       setEntries(newEntries);
@@ -47,7 +47,8 @@ export default function Home() {
   const handleAddIncome = async (income: { amount: number; description: string }) => {
     const newEntry = {
       ...income,
-      timestamp: Timestamp.now(),
+      // Use server timestamp for consistency
+      timestamp: Timestamp.fromDate(selectedDate),
     };
 
     try {
@@ -65,33 +66,41 @@ export default function Home() {
     }
   };
 
-  // --- START: Refactored Logic ---
-  const dateForFiltering = selectedDate || new Date();
+  const getStartOfDay = (date: Date) => {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  };
   
-  const dayStart = new Date(dateForFiltering);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dateForFiltering);
-  dayEnd.setHours(23, 59, 59, 999);
+  const getEndOfDay = (date: Date) => {
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  };
 
+  // --- START: Refactored Logic ---
+  const dayStart = getStartOfDay(selectedDate).getTime();
+  const dayEnd = getEndOfDay(selectedDate).getTime();
+  
   const selectedDateEntries = entries.filter((entry) => {
-    const entryDate = new Date(entry.timestamp);
-    return entryDate >= dayStart && entryDate <= dayEnd;
+    const entryTimestamp = entry.timestamp;
+    return entryTimestamp >= dayStart && entryTimestamp <= dayEnd;
   });
 
   const selectedDateTotal = selectedDateEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
-  const currentWeek = getWeekRange(dateForFiltering);
+  const currentWeek = getWeekRange(selectedDate);
   const weekEntries = entries.filter((entry) => {
     const entryDate = new Date(entry.timestamp);
     return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
   });
   const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
-  const isSaturday = dateForFiltering.getDay() === 6;
+  const isSaturday = selectedDate.getDay() === 6;
 
   let previousWeekTotal = 0;
   if (isSaturday) {
-    const previousWeek = getPreviousWeekRange(dateForFiltering);
+    const previousWeek = getPreviousWeekRange(selectedDate);
     const previousWeekEntries = entries.filter((entry) => {
       const entryDate = new Date(entry.timestamp);
       return entryDate >= previousWeek.start && entryDate <= previousWeek.end;
