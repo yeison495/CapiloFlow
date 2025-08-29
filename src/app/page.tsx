@@ -47,14 +47,11 @@ export default function Home() {
   const handleAddIncome = async (income: { amount: number; description: string }) => {
     if (!selectedDate) return;
     
-    // Create a new date object for the timestamp to avoid mutating selectedDate
-    const timestampDate = new Date(selectedDate);
-    const now = new Date();
-    timestampDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
-
+    // Use the server timestamp for consistency and to avoid timezone issues.
+    // The client-side selectedDate is used for filtering, but server time is the source of truth for creation.
     const newEntry = {
       ...income,
-      timestamp: Timestamp.fromDate(timestampDate),
+      timestamp: Timestamp.now(),
     };
 
     try {
