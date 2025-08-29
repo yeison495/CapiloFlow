@@ -45,8 +45,6 @@ export default function Home() {
 
 
   const handleAddIncome = async (income: { amount: number; description: string }) => {
-    if (!selectedDate) return;
-    
     // Use the server timestamp for consistency and to avoid timezone issues.
     // The client-side selectedDate is used for filtering, but server time is the source of truth for creation.
     const newEntry = {
@@ -118,6 +116,7 @@ export default function Home() {
       isSaturday: isTodaySaturday,
     };
   }, [entries, selectedDate]);
+
 
   if (loading || !selectedDate) {
     return (
