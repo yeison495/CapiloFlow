@@ -23,36 +23,39 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "entries"), (snapshot) => {
-      const newEntries: IncomeEntry[] = snapshot.docs
-      .filter(doc => doc.exists() && doc.data().timestamp) // Ensure doc and timestamp exist
-      .map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          amount: data.amount,
-          description: data.description,
-          // Safely handle timestamp conversion
-          timestamp: (data.timestamp as Timestamp).toMillis(),
-        };
-      });
-      setEntries(newEntries);
-      setLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      collection(db, 'entries'),
+      (snapshot) => {
+        const newEntries: IncomeEntry[] = snapshot.docs
+          .filter(doc => doc.exists() && doc.data().timestamp)
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              amount: data.amount,
+              description: data.description,
+              timestamp: (data.timestamp as Timestamp).toMillis(),
+            };
+          });
+        setEntries(newEntries);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching Firestore data: ", error);
+        setLoading(false); // Stop loading even if there's an error
+      }
+    );
 
     return () => unsubscribe();
   }, []);
 
 
   const handleAddIncome = async (income: { amount: number; description: string }) => {
-    const newEntry = {
-      ...income,
-      // Use server timestamp for consistency
-      timestamp: Timestamp.fromDate(selectedDate),
-    };
-
     try {
-      await addDoc(collection(db, "entries"), newEntry);
+      await addDoc(collection(db, "entries"), {
+        ...income,
+        timestamp: Timestamp.now(),
+      });
     } catch (error) {
       console.error("Error adding document: ", error);
     }
@@ -78,7 +81,6 @@ export default function Home() {
     return end;
   };
 
-  // --- START: Refactored Logic ---
   const dayStart = getStartOfDay(selectedDate).getTime();
   const dayEnd = getEndOfDay(selectedDate).getTime();
   
@@ -91,8 +93,8 @@ export default function Home() {
 
   const currentWeek = getWeekRange(selectedDate);
   const weekEntries = entries.filter((entry) => {
-    const entryDate = new Date(entry.timestamp);
-    return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
+    const entryTimestamp = entry.timestamp;
+    return entryTimestamp >= currentWeek.start.getTime() && entryTimestamp <= currentWeek.end.getTime();
   });
   const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
@@ -102,12 +104,11 @@ export default function Home() {
   if (isSaturday) {
     const previousWeek = getPreviousWeekRange(selectedDate);
     const previousWeekEntries = entries.filter((entry) => {
-      const entryDate = new Date(entry.timestamp);
-      return entryDate >= previousWeek.start && entryDate <= previousWeek.end;
+      const entryTimestamp = entry.timestamp;
+      return entryTimestamp >= previousWeek.start.getTime() && entryTimestamp <= previousWeek.end.getTime();
     });
     previousWeekTotal = previousWeekEntries.reduce((sum, entry) => sum + entry.amount, 0);
   }
-  // --- END: Refactored Logic ---
 
   if (loading) {
     return (
