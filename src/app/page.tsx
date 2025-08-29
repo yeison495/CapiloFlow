@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import type { IncomeEntry } from '@/types';
 import { getWeekRange, getPreviousWeekRange } from '@/lib/date-utils';
 import { DollarSign, CalendarDays, Scissors, Calendar as CalendarIcon } from 'lucide-react';
@@ -19,7 +19,7 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc, Timestamp } from 'fireb
 
 export default function Home() {
   const [entries, setEntries] = useState<IncomeEntry[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,8 +45,6 @@ export default function Home() {
 
 
   const handleAddIncome = async (income: { amount: number; description: string }) => {
-    // Use the server timestamp for consistency and to avoid timezone issues.
-    // The client-side selectedDate is used for filtering, but server time is the source of truth for creation.
     const newEntry = {
       ...income,
       timestamp: Timestamp.now(),
@@ -67,66 +65,56 @@ export default function Home() {
     }
   };
 
-  const {
-    selectedDateTotal,
-    weekTotal,
-    previousWeekTotal,
-    selectedDateEntries,
-    isSaturday,
-  } = useMemo(() => {
-    const today = new Date();
-    const date = selectedDate || today;
+  // --- START: Refactored Logic ---
+  const dateForFiltering = selectedDate || new Date();
+  
+  const dayStart = new Date(dateForFiltering);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dateForFiltering);
+  dayEnd.setHours(23, 59, 59, 999);
 
-    const dayStart = new Date(date);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(date);
-    dayEnd.setHours(23, 59, 59, 999);
+  const selectedDateEntries = entries.filter((entry) => {
+    const entryDate = new Date(entry.timestamp);
+    return entryDate >= dayStart && entryDate <= dayEnd;
+  });
 
-    const dayEntries = entries.filter((entry) => {
+  const selectedDateTotal = selectedDateEntries.reduce((sum, entry) => sum + entry.amount, 0);
+
+  const currentWeek = getWeekRange(dateForFiltering);
+  const weekEntries = entries.filter((entry) => {
+    const entryDate = new Date(entry.timestamp);
+    return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
+  });
+  const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
+
+  const isSaturday = dateForFiltering.getDay() === 6;
+
+  let previousWeekTotal = 0;
+  if (isSaturday) {
+    const previousWeek = getPreviousWeekRange(dateForFiltering);
+    const previousWeekEntries = entries.filter((entry) => {
       const entryDate = new Date(entry.timestamp);
-      return entryDate >= dayStart && entryDate <= dayEnd;
+      return entryDate >= previousWeek.start && entryDate <= previousWeek.end;
     });
+    previousWeekTotal = previousWeekEntries.reduce((sum, entry) => sum + entry.amount, 0);
+  }
+  // --- END: Refactored Logic ---
 
-    const dayTotal = dayEntries.reduce((sum, entry) => sum + entry.amount, 0);
-
-    const currentWeek = getWeekRange(date);
-    const weekEntries = entries.filter((entry) => {
-      const entryDate = new Date(entry.timestamp);
-      return entryDate >= currentWeek.start && entryDate <= currentWeek.end;
-    });
-    const weekTotal = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
-
-    const isTodaySaturday = date.getDay() === 6;
-
-    let prevWeekTotal = 0;
-    if (isTodaySaturday) {
-      const previousWeek = getPreviousWeekRange(date);
-      const previousWeekEntries = entries.filter((entry) => {
-        const entryDate = new Date(entry.timestamp);
-        return entryDate >= previousWeek.start && entryDate <= previousWeek.end;
-      });
-      prevWeekTotal = previousWeekEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    }
-
-    return {
-      selectedDateTotal: dayTotal,
-      weekTotal,
-      previousWeekTotal: prevWeekTotal,
-      selectedDateEntries: dayEntries,
-      isSaturday: isTodaySaturday,
-    };
-  }, [entries, selectedDate]);
-
-
-  if (loading || !selectedDate) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Scissors className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
+  
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+    }
+  };
 
-  const selectedDayIsToday = selectedDate && new Date().toDateString() === selectedDate.toDateString();
+  const selectedDayIsToday = new Date().toDateString() === selectedDate.toDateString();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -148,7 +136,7 @@ export default function Home() {
               <Calendar
                 mode="single"
                 selected={selectedDate}
-                onSelect={setSelectedDate}
+                onSelect={handleDateSelect}
                 initialFocus
                 locale={es}
               />
