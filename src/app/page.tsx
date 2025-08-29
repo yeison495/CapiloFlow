@@ -24,16 +24,17 @@ export default function Home() {
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "entries"), (snapshot) => {
-      const newEntries: IncomeEntry[] = [];
-      snapshot.forEach((doc) => {
+      const newEntries: IncomeEntry[] = snapshot.docs
+      .filter(doc => doc.exists()) // Make sure document exists
+      .map((doc) => {
         const data = doc.data();
-        newEntries.push({
+        return {
           id: doc.id,
           amount: data.amount,
           description: data.description,
-          // Firestore timestamps need to be converted to milliseconds
-          timestamp: (data.timestamp as Timestamp).toMillis(),
-        });
+          // Safely handle timestamp conversion
+          timestamp: data.timestamp ? (data.timestamp as Timestamp).toMillis() : new Date().getTime(),
+        };
       });
       setEntries(newEntries);
       setLoading(false);
@@ -46,11 +47,14 @@ export default function Home() {
   const handleAddIncome = async (income: { amount: number; description: string }) => {
     if (!selectedDate) return;
     
+    // Create a new date object for the timestamp to avoid mutating selectedDate
+    const timestampDate = new Date(selectedDate);
+    const now = new Date();
+    timestampDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+
     const newEntry = {
       ...income,
-      timestamp: Timestamp.fromDate(
-        new Date(selectedDate.setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds()))
-      ),
+      timestamp: Timestamp.fromDate(timestampDate),
     };
 
     try {
