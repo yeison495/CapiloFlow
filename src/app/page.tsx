@@ -69,24 +69,12 @@ export default function Home() {
     }
   };
 
-  const getStartOfDay = (date: Date) => {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  };
-  
-  const getEndOfDay = (date: Date) => {
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    return end;
-  };
-
-  const dayStart = getStartOfDay(selectedDate).getTime();
-  const dayEnd = getEndOfDay(selectedDate).getTime();
-  
   const selectedDateEntries = entries.filter((entry) => {
-    const entryTimestamp = entry.timestamp;
-    return entryTimestamp >= dayStart && entryTimestamp <= dayEnd;
+    const entryDate = new Date(entry.timestamp);
+    // Compare year, month, and day, ignoring time and timezone
+    return entryDate.getFullYear() === selectedDate.getFullYear() &&
+           entryDate.getMonth() === selectedDate.getMonth() &&
+           entryDate.getDate() === selectedDate.getDate();
   });
 
   const selectedDateTotal = selectedDateEntries.reduce((sum, entry) => sum + entry.amount, 0);
